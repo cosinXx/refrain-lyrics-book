@@ -12,7 +12,7 @@
 |---|---|---|---|
 | QQ音乐 | `y.qq.com/n/ryqq/playlist?id=NNN`、`i2.y.qq.com/...details/playlist.html?...&id=NNN`、`i.y.qq.com/n2/m/share/details/taoge.html?id=NNN` | ✅ 完整支持 | 取 `disstid`/`playlist` 路径中的 ID（排除 `songid=`），调 `c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg`；私密/需登录歌单返回空→浏览器 |
 | 网易云 | `music.163.com/m/playlist?id=NNN` | ✅ 完整支持 | **weapi 加密接口**（网页版真实接口，匿名可用）：`/weapi/v6/playlist/detail` 拿全量 trackIds → `/weapi/v3/song/detail` 批量取歌，实测 269 首全量成功；需 `pip install pycryptodome`，缺失时降级 v6（只回部分，标记 incomplete） |
-| 酷狗 | `m.kugou.com/songlist/gcid_XXX/?...` | ⚠️ 部分支持 | 分享页内嵌 `songs` 数组只含前 10 首预览（含歌名+歌手），标记 incomplete 提示浏览器补全 |
+| 酷狗 | `m.kugou.com/songlist/gcid_XXX/?...` | ⚠️ 仅前10首 | 分享页内嵌 `songs` 数组只含前 10 首预览（含歌名+歌手），PC 页强制扫码登录、公开 API 已失效；全量需登录态或浏览器手动提取，标记 incomplete |
 | 汽水/抖音 | `qishui.douyin.com/s/xxxxx`、`music.douyin.com/qishui/share/playlist?playlist_id=NNN` | ❌ 必须浏览器 | JS 渲染+短链，无法脚本展开 |
 | 酷我 | `www.kuwo.cn` | ❌ 必须浏览器 | 无公开稳定接口（需登录 cookie） |
 
@@ -42,7 +42,7 @@
 5. 如果内置浏览器遇到登录墙/验证码且无法绕过，再向用户说明情况，请用户提供歌单截图或手动歌曲列表。
 
 各平台页面特点：
-- **酷狗**：PC 页 `www.kugou.com/playlist/id/xxx.html` 或分享页，歌曲列表直接渲染，滚动加载全部；移动页 `m.kugou.com` 只内嵌前 10 首。
+- **酷狗**：PC 页 `www.kugou.com/playlist/id/xxx.html` 强制扫码登录（歌单主体为空）；移动页 `m.kugou.com` 只内嵌前 10 首预览；全量提取需登录态 cookie 或浏览器手动逐条复制。
 - **汽水音乐**：短链 `qishui.douyin.com/s/xxx` 会跳转到 `music.douyin.com/qishui/share/playlist`，JS 渲染，PC 模式下需等加载后滚动。
 - **酷我**：PC 页 `www.kuwo.cn/playlist_detail/xxx.html`，优先 PC 页。
 

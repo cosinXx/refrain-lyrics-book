@@ -26,21 +26,49 @@ except AttributeError:
 
 
 def load_font(size, bold=False):
-    # bold=True 优先用 STHeiti Medium（本身是粗体），否则用 Light
-    candidates = (
-        [('/System/Library/Fonts/STHeiti Medium.ttc', 0)] if bold else
-        [('/System/Library/Fonts/STHeiti Light.ttc', 0), ('/System/Library/Fonts/STHeiti Medium.ttc', 0)]
-    )
-    candidates += [
-        ('/System/Library/Fonts/PingFang.ttc', 1 if bold else 0),
-        ('/Library/Fonts/Arial Unicode.ttf', 0),
-    ]
+    """跨平台字体探测：macOS / Windows / Linux 依次尝试，找不到回退默认字体。"""
+    if sys.platform == 'darwin':
+        candidates = (
+            [('/System/Library/Fonts/STHeiti Medium.ttc', 0)] if bold else
+            [('/System/Library/Fonts/STHeiti Light.ttc', 0), ('/System/Library/Fonts/STHeiti Medium.ttc', 0)]
+        )
+        candidates += [
+            ('/System/Library/Fonts/PingFang.ttc', 1 if bold else 0),
+            ('/Library/Fonts/Arial Unicode.ttf', 0),
+            ('/System/Library/Fonts/Supplemental/Arial Unicode.ttf', 0),
+        ]
+    elif sys.platform in ('win32', 'cygwin'):
+        candidates = [
+            (r'C:\Windows\Fonts\msyh.ttc', 1 if bold else 0),       # 微软雅黑
+            (r'C:\Windows\Fonts\msyhbd.ttc', 0),                      # 微软雅黑粗体
+            (r'C:\Windows\Fonts\simhei.ttf', 0),                      # 黑体
+            (r'C:\Windows\Fonts\simsun.ttc', 0),                      # 宋体
+        ]
+    else:  # Linux / other
+        candidates = [
+            ('/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', 0) if bold else
+            ('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', 0),
+            ('/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc', 0),
+            ('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc', 0),
+            ('/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', 0),
+        ]
     for path, index in candidates:
         if os.path.exists(path):
             try:
                 return ImageFont.truetype(path, size, index=index)
             except Exception:
                 continue
+    # 最后回退：扫描常见字体目录找任意 CJK 字体
+    for scan_dir in ('/usr/share/fonts', '/usr/local/share/fonts', os.path.expanduser('~/.fonts')):
+        if os.path.isdir(scan_dir):
+            for root, _, files in os.walk(scan_dir):
+                for f in files:
+                    if f.lower().endswith(('.ttf', '.ttc', '.otf')) and any(
+                        k in f.lower() for k in ('cjk', 'noto', 'wqy', 'hei', 'song', 'ming', 'yahei', 'pingfang', 'stheiti')):
+                        try:
+                            return ImageFont.truetype(os.path.join(root, f), size)
+                        except Exception:
+                            continue
     return ImageFont.load_default()
 
 
