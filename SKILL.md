@@ -1,0 +1,77 @@
+---
+name: refrain
+description: 歌词本制作（Refrain）——把音乐歌单做成可打印的中文歌词本。当用户分享音乐歌单链接（汽水音乐/抖音、QQ音乐、网易云、酷狗等）或单曲链接、歌单截图，并要求"做歌词本/歌词书/歌词乐理本/打印歌词/收录这些歌"时使用。覆盖全流程：识别解析歌单 → 提取歌曲列表 → 联网逐首抓取核对歌词 → 去重精简（重复副歌只留一遍）→ 生成 A5 两栏带序号不跨页的 DOCX → 可选制作专辑拼贴封面 → 交付与清理旧版本。
+---
+
+# 歌词本制作（Lyrics Book Builder）
+
+把一份歌单做成一本可直接打印的歌词本。本 skill 沉淀了完整生产流程与验证过的脚本，产出的 DOCX 满足：A5 纸、双面打印、一页左右两栏各一首歌、歌不跨页不跨栏、每首带序号且与目录对应、重复副歌只留一遍、字号随歌词行数自适应。
+
+## 核心工作流
+
+```
+输入(歌单链接/单曲链接/歌单截图) → ① 提取歌曲列表 → ② 整理去重 → ③ 联网抓歌词(三级兜底)
+        → ④ 清洗去重核对 → ⑤ 生成A5两栏DOCX → ⑥ 封面(可选) → ⑦ 校验交付清理
+```
+
+### ① 提取歌曲列表（三种输入形态）
+- **歌单链接**：运行 `scripts/fetch_playlist.py "<分享链接>" -o songs.json`。输出带 `incomplete` 标记：`true` 表示脚本只拿到部分歌曲（酷狗常见），**必须先浏览器补全再继续**。
+- **单曲链接**：同样用 `fetch_playlist.py`，自动识别平台（QQ/网易云脚本支持；酷狗/汽水/酷我提示浏览器）；多个单曲链接逐条解析后合并。
+- **歌单截图**：用视觉逐行读取歌名+歌手（详见 `references/input-forms.md`），模糊项标注待确认，不凭印象编。
+- **平台支持如实声明（实测）**：QQ音乐、**网易云（weapi 加密接口，实测 269 首全量）** 脚本完整支持；酷狗脚本只能取分享页内嵌前 10 首（incomplete）；汽水音乐/酷我必须浏览器。
+- **兜底**：用浏览器（browser-use）打开链接/页面，滚动加载全部歌曲，逐条提取歌名与歌手写入 JSON。详见 `references/playlist-sources.md`。
+
+### ② 整理歌曲列表
+- 按歌名+歌手去重（同一首歌不同版本保留一个）。
+- 用户未指定语言时默认偏好中文歌曲；纯外文歌先问用户或按歌单实际内容保留。
+- 若歌单为空或解析数量异常（明显少于页面显示），改用浏览器核对，不要凭空补歌。
+
+### ③ 联网抓取歌词（三级兜底）
+按以下优先级逐级兜底，**必须联网获取，禁止凭记忆写歌词**：
+1. **脚本抓取**：运行 `scripts/fetch_lyrics.py songs.json -o lyrics.json --workers 3`（QQ音乐公开接口，逐首搜索→取歌词，输出带 `status` 和 `source_artist` 供核对）。
+2. **其他公开接口**：脚本 `status=problem` 的歌，尝试网易云/酷狗等其它歌词接口单独补（如网易云 `/api/song/lyric?id=`、酷狗歌词接口）。
+3. **网络搜索兜底**：仍拿不到的，用 `general_search` 搜「歌名 歌手 歌词」，从结果页提取原文。
+- 歌手有多个版本（翻唱/原唱）时以用户点名的歌手为准（如宠爱=TFBOYS、最好的安排=曲婉婷）；务必核对 `source_artist` 与目标歌手一致，不一致时退回重选。
+
+### ④ 歌词清洗（去重 + 清理 + 核对）
+按 `references/lyrics-quality.md` 执行，核心规则：
+1. **重复副歌只留一遍**：完全相同的连续块（4-12行）只保留第一遍；每遍词不同的段落保留。脚本 `build_lyrics_book.py` 默认自动去重，可用 `--keep-dups` 关闭。
+2. **清理分唱标记**：删除单独成行的「源：/凯：/玺：/合：/男：/女：/rap：/Bridge：/Chorus：/TFBOYS：/王源：」等标记行。
+3. **错字/漏句修正**：抽查关键行与原歌词比对；用户重点点名过的歌必须逐字核对。
+
+### ⑤ 生成 A5 两栏 DOCX
+运行 `scripts/build_lyrics_book.py lyrics.json -o 歌词本.docx --title "cosinX 的歌词乐理本"`。
+默认 A5（148×210mm），支持 `--size b5|a4`。生成结构：标题页 → 目录页（两列无边框）→ 正文两栏，每首歌前插分栏符 + 段落 keep_together/keep_with_next，保证**一栏一首、绝不串栏、不跨页**；歌名前带序号与目录一致；字号按行数自适应。格式细节见 `references/format-spec.md`。
+
+### ⑥ 封面（可选，用户要打印时强烈建议）
+- 用户要求封面时：用**真实专辑封面**（从歌词本曲目里挑代表性的歌，`image_search` 下载对应专辑封面），PIL 拼贴成 A5（148×210mm 即 1240×1754px @216dpi）图。
+- 风格：错落堆叠、带旋转和阴影、铺满但不遮挡标题；标题按用户指定（如「cosinX 的歌词乐理本」，注意大小写）。不要 AI 生成整图、不要整齐网格。
+- 参考脚本：`scripts/make_cover.py`（可改标题/背景/排列）。
+
+### ⑦ 校验、交付与清理
+- **校验**（对生成结果执行以下检查，全部通过才算完成）：
+  - 歌数 = 歌单歌曲数：`python3 -c "from docx import Document; d=Document('歌词本.docx'); print(sum(1 for p in d.paragraphs if p.text[:2].rstrip('.').isdigit()))"`
+  - 页尺寸 A5 两栏：`python3 -c "from docx import Document; d=Document('歌词本.docx'); print(round(d.sections[1].page_width.mm), round(d.sections[1].page_height.mm), d.sections[1]._sectPr.xpath('.//w:cols')[0].get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}num'))"`
+  - 无 <6pt 小字：脚本会保证歌手行 ≥6pt、空歌词歌跳过并警告、超长歌 stderr 警告，确认运行日志无警告。
+  - 抽查 2-3 首歌词与来源比对无错字。
+- **交付**：最终 DOCX（和封面图）用 `present_files` 交付；用户手机端时改用 `FileBatchUpload` 传下载链接。
+- **清理**：任务全部完成后，删除中间文件（songs.json、lyrics.json、check_*.json、测试图等）与旧版本，只保留最终版（如 `歌词本_最终版.docx`）。清理前必须先确认任务已完成。
+
+## 关键质量红线
+- 歌词必须联网来源，禁止凭记忆生成。
+- 歌名序号 = 目录序号 = 正文序号，三者一致。
+- 任何一首歌都不得跨页或串栏；放不下时降字号（最低 6pt），仍放不下（>68 行，脚本会警告）则人工精简到核心段落。
+- 重复副歌默认只留一遍（用户唱歌本用途），除非用户明确要完整版。
+
+## 脚本清单
+| 脚本 | 作用 |
+|---|---|
+| `scripts/fetch_playlist.py` | 歌单/单曲链接 → 歌曲列表 JSON（带 incomplete 完整性标记） |
+| `scripts/fetch_lyrics.py` | 歌曲列表 → 联网歌词 JSON（QQ音乐接口，歌手版本匹配） |
+| `scripts/build_lyrics_book.py` | 歌词 JSON → A5两栏 DOCX（清洗/去重/字号自适应/序号/不跨页/超长警告） |
+| `scripts/make_cover.py` | 专辑封面 → A5 错落拼贴封面图 |
+
+## 依赖
+- Python 库：`python-docx`、`Pillow`、`pycryptodome`（网易云 weapi 加密接口必需；缺失时网易云自动降级 v6 接口并警告 incomplete）。缺失时 `pip install python-docx pillow pycryptodome`。
+- 网络：QQ音乐公开接口（c.y.qq.com）与网易云 weapi 通常可用；酷狗/汽水/酷我需浏览器兜底。
+- 说明：字号自适应表按 A5 校准；用 `--size b5/a4` 时字号档位不变（结果偏保守、更清晰），如需更密排版请人工调参。
