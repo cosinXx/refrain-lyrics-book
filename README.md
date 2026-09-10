@@ -25,7 +25,9 @@
 
 ## 新手推荐：让 AI 帮你一键安装（最省事）
 
-把这个仓库的 `refrain/` 整个文件夹复制到你的 AI Agent 的 user skills 目录下即可，无需编译、无需配置。
+**最简单的用法：直接把这个仓库地址丢给 AI，让 AI 去读取这个技能即可使用。** 对 AI 说："读取 https://github.com/cosinXx/refrain-lyrics-book 这个技能并安装"，剩下的它会自己搞定。
+
+如果 AI 不支持自动安装，手动方式也很简单：把这个仓库的 `refrain/` 整个文件夹复制到你的 AI Agent 的 user skills 目录下即可，无需编译、无需配置。
 
 典型路径（豆包 / Doubao Work）：
 ```
