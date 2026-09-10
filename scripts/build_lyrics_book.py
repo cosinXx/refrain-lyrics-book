@@ -53,28 +53,55 @@ def normalize_name(name):
     return n.lower().strip()
 
 
-def normalize_artist(artist):
-    """歌手归一化：取第一个歌手，去空格、统一分隔符，小写。"""
+def artist_set(artist):
+    """把歌手字符串拆成归一化歌手集合（去空格、小写、统一分隔符）。"""
     if not artist:
-        return ''
-    # 按常见分隔符切，取第一个
-    first = re.split(r'[/、,，&和\s]+', artist.strip())[0]
-    first = re.sub(r'[\s]', '', first)
-    return first.lower().strip()
+        return set()
+    parts = re.split(r'[/、,，&和\s]+', artist.strip())
+    return {re.sub(r'\s', '', p).lower() for p in parts if p.strip()}
 
 
 def dedup_songs(songs):
-    """按归一化歌名+第一个歌手去重，保留第一个出现的版本。"""
-    seen = set()
+    """按归一化歌名分组，组内用歌手集合重叠匹配去重。
+
+    同一首歌在不同平台首歌手可能不同（如《我爱你但是我要回家》首歌手分别是
+    邵甲天/ET/无面小生），只看第一个歌手会漏去重。改为：歌名相同且歌手集合
+    有交集（或任一方歌手为空）即视为同一首，保留歌词最多的版本。
+    """
+    # 按归一化歌名分组
+    groups = {}
+    for idx, s in enumerate(songs):
+        key = normalize_name(s.get('name', ''))
+        groups.setdefault(key, []).append((idx, s))
+
     out = []
     dup_count = 0
-    for s in songs:
-        key = (normalize_name(s.get('name', '')), normalize_artist(s.get('artist', '')))
-        if key in seen:
-            dup_count += 1
-            continue
-        seen.add(key)
-        out.append(s)
+    for key, members in groups.items():
+        # 组内聚类：歌手集合有交集或任一方为空 → 同一首
+        clusters = []  # 每个 cluster 是 [(idx, s), ...]
+        for idx, s in members:
+            a_set = artist_set(s.get('artist', ''))
+            placed = False
+            for cl in clusters:
+                # 与 cluster 中任一首歌手集合有交集就算同一首
+                for _, other in cl:
+                    o_set = artist_set(other.get('artist', ''))
+                    if not a_set or not o_set or (a_set & o_set):
+                        cl.append((idx, s))
+                        placed = True
+                        break
+                if placed:
+                    break
+            if not placed:
+                clusters.append([(idx, s)])
+        # 每个 cluster 保留歌词行数最多的版本（歌词多的更可能是完整版）
+        for cl in clusters:
+            best = max(cl, key=lambda x: len(x[1].get('lyrics') or []))
+            out.append(best[1])
+            dup_count += len(cl) - 1
+
+    # 恢复原始输入顺序
+    out.sort(key=lambda s: next(i for i, x in enumerate(songs) if x is s))
     return out, dup_count
 
 
@@ -208,7 +235,7 @@ def build(songs, out_path, title='我的歌词乐理本', size='a5',
     # 1. 歌手归一化去重
     songs, dup_count = dedup_songs(songs)
     if dup_count:
-        print(f'去重: 移除 {dup_count} 首重复歌曲（按归一化歌名+首歌手）', file=sys.stderr)
+        print(f'去重: 移除 {dup_count} 首重复歌曲（按归一化歌名+歌手集合重叠）', file=sys.stderr)
 
     # 2. 清洗 + 去重；空歌词歌跳过
     total_removed = 0
