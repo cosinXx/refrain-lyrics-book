@@ -28,21 +28,23 @@
 
 单曲链接解析结果也是 `songs:[1首]` 结构，可直接合并进歌曲列表，走同一套歌词流程。
 
-## 浏览器兜底流程（必须用 agent 内置沙箱浏览器）
+## 浏览器兜底流程（必须用 agent 内置沙箱浏览器 + PC 桌面模式）
 
 **重要：使用 AI agent 自带的浏览器自动化工具（browser-use / seed_browser_use / mac_computer_use_tool plane="bu"），在 agent 沙箱内操作页面。禁止调用用户本地系统浏览器，禁止让用户手动打开网页。**
 
+**必须用 PC 桌面模式访问**（设置桌面 User-Agent，如 Chrome on macOS/Windows），**禁止用手机移动模式**——移动模式下酷狗/汽水等歌单只显示部分歌曲或要求登录，PC 网页版通常能直接看到完整列表。
+
 标准步骤：
-1. 内置浏览器 `navigate(分享链接)`，等待页面加载完成。
+1. 内置浏览器 `navigate(分享链接)`，设置桌面 UA，等待页面加载完成。
 2. 循环 `scroll` 滚动到列表底部，每次滚动后观察歌曲数是否增加，直到数量不再变化（酷狗/汽水都是懒加载分页，必须滚到底）。
 3. 用结构化读取（`read_all` / `get_page_text` / DOM 选择器）逐条提取**歌名 + 歌手**，不要用截图 OCR（容易漏行错字）。
 4. 与页面顶部显示的歌单总数核对，一致后写入 `songs.json`（`incomplete: false`）。
 5. 如果内置浏览器遇到登录墙/验证码且无法绕过，再向用户说明情况，请用户提供歌单截图或手动歌曲列表。
 
 各平台页面特点：
-- **酷狗**：`m.kugou.com/songlist/` 移动页，歌曲列表直接渲染，滚动加载全部。
-- **汽水音乐**：短链 `qishui.douyin.com/s/xxx` 会跳转到 `music.douyin.com/qishui/share/playlist`，JS 渲染，需等加载后滚动。
-- **酷我**：PC 页可能需要登录，优先尝试移动页。
+- **酷狗**：PC 页 `www.kugou.com/playlist/id/xxx.html` 或分享页，歌曲列表直接渲染，滚动加载全部；移动页 `m.kugou.com` 只内嵌前 10 首。
+- **汽水音乐**：短链 `qishui.douyin.com/s/xxx` 会跳转到 `music.douyin.com/qishui/share/playlist`，JS 渲染，PC 模式下需等加载后滚动。
+- **酷我**：PC 页 `www.kuwo.cn/playlist_detail/xxx.html`，优先 PC 页。
 
 ## 常见坑
 - **歌名带版本后缀**：如「快乐酷宝-(电视剧《快乐酷宝2》主题曲)」，提取后保留纯歌名。

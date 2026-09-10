@@ -20,11 +20,13 @@ description: 歌词本制作（Refrain）——把音乐歌单做成可打印的
 - **歌单截图**：用视觉逐行读取歌名+歌手（详见 `references/input-forms.md`），模糊项标注待确认，不凭印象编。
 - **平台支持如实声明（实测）**：QQ音乐、**网易云（weapi 加密接口，实测 269 首全量）** 脚本完整支持；酷狗脚本只能取分享页内嵌前 10 首（incomplete）；汽水音乐/酷我必须浏览器。
 
-#### 浏览器兜底（必须用 agent 内置浏览器，禁止调本地系统浏览器）
+#### 浏览器兜底（必须用 agent 内置沙箱浏览器 + PC 桌面模式）
 当脚本返回 `incomplete=true` 或平台不支持时，**必须使用 AI agent 自带的浏览器自动化工具**（如 `browser-use`、`seed_browser_use`、`mac_computer_use_tool(plane="bu")` 等沙箱浏览器），在 agent 内部完成页面操作，**不要调用用户本地系统浏览器，不要让用户手动打开网页**。
 
+**必须用 PC 桌面模式访问**（桌面 User-Agent，如 Chrome on macOS/Windows），**不要用手机移动模式**——移动模式下很多歌单只显示部分歌曲或要求登录，PC 网页版通常能直接看到完整列表。
+
 标准流程：
-1. 用内置浏览器 `navigate(分享链接)`，等待页面加载。
+1. 用内置浏览器 `navigate(分享链接)`，设置桌面 UA，等待页面加载。
 2. 循环 `scroll` 滚动到列表底部，直到歌曲数量不再增加（酷狗/汽水都是懒加载分页）。
 3. 用结构化读取（`read_all` / `get_page_text` / DOM 提取）逐条拿到**歌名 + 歌手**。
 4. 与页面显示的歌单总数核对，数量一致后写入 `songs.json`（`incomplete: false`）。
